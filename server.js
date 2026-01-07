@@ -1,22 +1,65 @@
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
-import { GoogleGenAI } from "@google/genai";
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
+import { GoogleGenAI } from '@google/genai';
+import authRoutes from './server/routes/auth.js';
+import ChatHistory from './server/models/ChatHistory.js';
+import { JWT_SECRET, MONGODB_URI, GEMINI_API_KEY, PORT, NODE_ENV } from './server/config.js';
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.FRONTEND_URL 
+    : 'http://localhost:5173',
+  credentials: true,
+  methods: ['GET', 'POST', 'DELETE', 'PUT'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
 app.use(express.json());
 
-if (!process.env.GEMINI_API_KEY) {
-  console.error("Missing GEMINI_API_KEY in .env");
+// MongoDB connection
+mongoose
+  .connect(MONGODB_URI)
+  .then(() => console.log('✅ Connected to MongoDB'))
+  .catch((err) => console.error('❌ MongoDB connection error:', err));
+
+// Gemini AI setup
+if (!GEMINI_API_KEY) {
+  console.error('Missing GEMINI_API_KEY in .env');
   process.exit(1);
 }
+const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+console.log('Using JWT_SECRET:', JWT_SECRET);
 
-// "Context chuẩn" bám theo slide của bạn (bạn có thể tinh chỉnh thêm)
+// Middleware to verify JWT token
+const authenticate = (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  console.log('Auth Header:', authHeader);
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    console.log('No token or invalid format');
+    return res.status(401).json({ error: 'Không có token xác thực' });
+  }
+
+  const token = authHeader.split(' ')[1];
+  console.log('Token received:', token ? 'Yes' : 'No');
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    console.log('Token decoded successfully for user:', decoded.userId);
+    req.userId = decoded.userId;
+    next();
+  } catch (error) {
+    console.error('Token verification error:', error.message);
+    return res.status(401).json({ error: 'Token không hợp lệ hoặc đã hết hạn' });
+  }
+};
+
 const COURSE_CONTEXT = `
 Bạn là trợ giảng CNXHKH. Trả lời ngắn gọn, có cấu trúc, đúng kiến thức về:
 
@@ -50,32 +93,22 @@ Bạn là trợ giảng CNXHKH. Trả lời ngắn gọn, có cấu trúc, đún
 - Trả lời súc tích nhưng đầy đủ thông tin
 `;
 
-// Add simple rate limiting
-let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 2000; // 2 seconds between requests
+// Auth routes
+app.use('/api/auth', authRoutes);
 
-app.post("/api/chat", async (req, res) => {
+// Chat endpoint - requires authentication
+app.post('/api/chat', authenticate, async (req, res) => {
   try {
-    // Rate limit check
-    const now = Date.now();
-    if (now - lastRequestTime < MIN_REQUEST_INTERVAL) {
-      return res.status(429).json({ 
-        error: "Vui lòng chờ 2 giây giữa các câu hỏi." 
-      });
-    }
-    lastRequestTime = now;
-
     const { message, history = [] } = req.body;
 
-    if (!message || typeof message !== "string") {
-      return res.status(400).json({ error: "message is required" });
+    if (!message || typeof message !== 'string') {
+      return res.status(400).json({ error: 'message is required' });
     }
 
-    // Gom hội thoại (simple)
     const transcript = history
       .slice(-10)
-      .map(m => `${m.role === "user" ? "User" : "Assistant"}: ${m.text}`)
-      .join("\n");
+      .map((m) => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.text}`)
+      .join('\n');
 
     const prompt = `
 ${COURSE_CONTEXT}
@@ -89,38 +122,77 @@ ${message}
 Trả lời (bullet points nếu phù hợp):
 `;
 
-    // Chọn model (tham khảo docs; bạn có thể đổi sang model khác nếu cần)
     const result = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      model: 'gemini-2.5-flash-lite',
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
     });
 
     const text =
-      result?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") ??
-      "Không nhận được phản hồi từ Gemini.";
+      result?.candidates?.[0]?.content?.parts?.map((p) => p.text).join('') ??
+      'Không nhận được phản hồi từ Gemini.';
+
+    // Save to database
+    let chatHistory = await ChatHistory.findOne({ userId: req.userId });
+    if (!chatHistory) {
+      chatHistory = new ChatHistory({ userId: req.userId, messages: [] });
+    }
+
+    chatHistory.messages.push(
+      { role: 'user', text: message },
+      { role: 'assistant', text: text }
+    );
+
+    await chatHistory.save();
 
     res.json({ reply: text });
   } catch (err) {
     console.error(err);
-    
-    // Handle quota errors specifically
+
     if (err.status === 429) {
-      return res.status(429).json({ 
-        error: "Đã vượt quá giới hạn API. Vui lòng thử lại sau vài giây." 
+      return res.status(429).json({
+        error: 'Đã vượt quá giới hạn API. Vui lòng thử lại sau vài giây.',
       });
     }
-    
-    res.status(500).json({ error: "Gemini request failed" });
+
+    res.status(500).json({ error: 'Gemini request failed' });
   }
 });
 
-// Export for Vercel serverless
+// Get chat history
+app.get('/api/chat/history', authenticate, async (req, res) => {
+  try {
+    const chatHistory = await ChatHistory.findOne({ userId: req.userId });
+    res.json({ messages: chatHistory?.messages || [] });
+  } catch (error) {
+    console.error('Get history error:', error);
+    res.status(500).json({ error: 'Không thể tải lịch sử chat' });
+  }
+});
+
+// Delete chat history
+app.delete('/api/chat/history', authenticate, async (req, res) => {
+  try {
+    await ChatHistory.findOneAndDelete({ userId: req.userId });
+    res.json({ message: 'Đã xóa lịch sử chat' });
+  } catch (error) {
+    console.error('Delete history error:', error);
+    res.status(500).json({ error: 'Không thể xóa lịch sử chat' });
+  }
+});
+
+// Serve static files in production
+if (NODE_ENV === 'production') {
+  app.use(express.static('dist'));
+  app.get('*', (req, res) => {
+    res.sendFile('index.html', { root: 'dist' });
+  });
+}
+
 export default app;
 
 // Only listen on port if not in serverless environment
-if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 3000;
+if (NODE_ENV !== 'production') {
   app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
   });
 }
