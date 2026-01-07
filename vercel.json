@@ -2,6 +2,10 @@
   "version": 2,
   "builds": [
     {
+      "src": "api/serverless.js",
+      "use": "@vercel/node"
+    },
+    {
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
@@ -11,11 +15,7 @@
   ],
   "routes": [
     {
-      "src": "/api/auth/(.*)",
-      "dest": "/api/serverless.js"
-    },
-    {
-      "src": "/api/chat/(.*)",
+      "src": "/api/(.*)",
       "dest": "/api/serverless.js"
     },
     {
