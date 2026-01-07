@@ -9,6 +9,7 @@
     "server": "node server.js",
     "client": "vite",
     "build": "vite build",
+    "vercel-build": "vite build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
