@@ -114,6 +114,13 @@ Trả lời (bullet points nếu phù hợp):
   }
 });
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log(`Server running on http://localhost:${process.env.PORT || 3000}`);
-});
+// Export for Vercel serverless
+export default app;
+
+// Only listen on port if not in serverless environment
+if (process.env.NODE_ENV !== 'production') {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
