@@ -12,11 +12,11 @@ dotenv.config();
 
 const app = express();
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL 
+  origin: NODE_ENV === 'production' 
+    ? ['https://mln-131-g1-chat-bot.vercel.app', 'https://mln131-g1-chatbot.vercel.app']
     : 'http://localhost:5173',
   credentials: true,
-  methods: ['GET', 'POST', 'DELETE', 'PUT'],
+  methods: ['GET', 'POST', 'DELETE', 'PUT', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());

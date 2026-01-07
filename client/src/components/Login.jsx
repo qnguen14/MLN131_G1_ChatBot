@@ -38,6 +38,12 @@ function Login({ onLogin }) {
         }),
       });
 
+      // Check if response is JSON
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        throw new Error('Không thể kết nối đến server. Vui lòng thử lại sau.');
+      }
+
       const data = await response.json();
 
       if (!response.ok) {
@@ -46,7 +52,7 @@ function Login({ onLogin }) {
 
       onLogin(data.user, data.token);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || 'Lỗi kết nối server');
     } finally {
       setLoading(false);
     }
