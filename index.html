@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Chatbot GCCN - Gemini</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px 0;
+    }
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 16px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    }
+    h3 {
+      margin: 0 0 20px 0;
+      color: #1f2937;
+      font-size: 1.5rem;
+      text-align: center;
+    }
+    .chat {
+      height: 500px;
+      overflow-y: auto;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      padding: 16px;
+      background: #f9fafb;
+      scroll-behavior: smooth;
+    }
+    .chat::-webkit-scrollbar {
+      width: 8px;
+    }
+    .chat::-webkit-scrollbar-track {
+      background: #f1f1f1;
+      border-radius: 10px;
+    }
+    .chat::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 10px;
+    }
+    .chat::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    .msg {
+      margin: 12px 0;
+      padding: 12px 16px;
+      border-radius: 12px;
+      line-height: 1.6;
+      max-width: 85%;
+      word-wrap: break-word;
+      animation: fadeIn 0.3s ease-in;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .msg.user-msg {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      margin-left: auto;
+      border-bottom-right-radius: 4px;
+    }
+    .msg.bot-msg {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      margin-right: auto;
+      border-bottom-left-radius: 4px;
+    }
+    .me {
+      font-weight: 600;
+      color: #fef3c7;
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.85rem;
+    }
+    .bot {
+      font-weight: 600;
+      color: #667eea;
+      display: block;
+      margin-bottom: 4px;
+      font-size: 0.85rem;
+    }
+    .msg-text {
+      white-space: pre-wrap;
+    }
+    .msg-text strong {
+      font-weight: 700;
+      color: inherit;
+    }
+    .msg-text em {
+      font-style: italic;
+    }
+    .row {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    input {
+      flex: 1;
+      padding: 14px 16px;
+      border: 2px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 1rem;
+      transition: all 0.2s;
+      outline: none;
+    }
+    input:focus {
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    button {
+      padding: 14px 28px;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: all 0.2s;
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .typing {
+      display: none;
+      padding: 12px 16px;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      max-width: 80px;
+      margin: 12px 0;
+    }
+    .typing.active {
+      display: block;
+    }
+    .typing span {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #667eea;
+      margin: 0 2px;
+      animation: typing 1.4s infinite;
+    }
+    .typing span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+    .typing span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+    @keyframes typing {
+      0%, 60%, 100% { transform: translateY(0); }
+      30% { transform: translateY(-10px); }
+    }
+    .clear-btn {
+      padding: 8px 16px;
+      background: #ef4444;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 12px;
+      width: 100%;
+    }
+    .clear-btn:hover {
+      background: #dc2626;
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h3>💬 Chatbot "Sứ mệnh lịch sử của giai cấp công nhân"</h3>
+    <div id="chat" class="chat"></div>
+    <div class="typing" id="typing">
+      <span></span>
+      <span></span>
+      <span></span>
+    </div>
+    <div class="row">
+      <input id="q" placeholder="Nhập câu hỏi của bạn..." />
+      <button id="send">📤 Gửi</button>
+    </div>
+    <button id="clearHistory" class="clear-btn">🗑️ Xóa lịch sử chat</button>
+  </div>
+</div>
+
+<script>
+const chat = document.getElementById("chat");
+const q = document.getElementById("q");
+const typing = document.getElementById("typing");
+const sendBtn = document.getElementById("send");
+const clearBtn = document.getElementById("clearHistory");
+let history = [];
+
+// Load chat history from localStorage
+function loadHistory() {
+  const saved = localStorage.getItem('chatHistory');
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      history = parsed.history || [];
+      parsed.messages?.forEach(msg => {
+        addLine(msg.label, msg.text, msg.cls, msg.isUser);
+      });
+    } catch (e) {
+      console.error('Failed to load history:', e);
+    }
+  } else {
+    // Show initial greeting only if no history
+    addLine("MLN131 Bot", "👋 Chào bạn! Tôi là trợ lý ảo về Chương 2: Sứ mệnh lịch sử của giai cấp công nhân.\n\nBạn có thể hỏi tôi về:\n• Khái niệm và đặc điểm GCCN\n• Nội dung sứ mệnh lịch sử\n• Điều kiện quy định sứ mệnh\n• GCCN hiện nay\n• GCCN Việt Nam\n\nHãy đặt câu hỏi của bạn nhé!", "bot", false);
+  }
+}
+
+// Save chat history to localStorage
+function saveHistory() {
+  const messages = Array.from(chat.children)
+    .filter(el => el.classList.contains('msg'))
+    .map(el => {
+      const label = el.querySelector('.me, .bot')?.textContent || '';
+      const text = el.querySelector('.msg-text')?.innerHTML.replace(/<br>/g, '\n').replace(/<strong>(.*?)<\/strong>/g, '**$1**').replace(/<em>(.*?)<\/em>/g, '*$1*') || '';
+      const isUser = el.classList.contains('user-msg');
+      const cls = isUser ? 'me' : 'bot';
+      return { label, text, cls, isUser };
+    });
+  
+  localStorage.setItem('chatHistory', JSON.stringify({ messages, history }));
+}
+
+// Clear chat history
+function clearHistory() {
+  if (confirm('Bạn có chắc muốn xóa toàn bộ lịch sử chat?')) {
+    localStorage.removeItem('chatHistory');
+    history = [];
+    chat.innerHTML = '';
+    addLine("MLN131 Bot", "👋 Chào bạn! Tôi là trợ lý ảo về Chương 2: Sứ mệnh lịch sử của giai cấp công nhân.\n\nBạn có thể hỏi tôi về:\n• Khái niệm và đặc điểm GCCN\n• Nội dung sứ mệnh lịch sử\n• Điều kiện quy định sứ mệnh\n• GCCN hiện nay\n• GCCN Việt Nam\n\nHãy đặt câu hỏi của bạn nhé!", "bot", false);
+  }
+}
+
+function addLine(label, text, cls, isUser = false){
+  const div = document.createElement("div");
+  div.className = `msg ${isUser ? 'user-msg' : 'bot-msg'}`;
+  
+  // Convert markdown-style formatting to HTML
+  let formattedText = text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+    .replace(/\*(.*?)\*/g, '<em>$1</em>') // Italic
+    .replace(/\n/g, '<br>'); // Line breaks
+  
+  div.innerHTML = `<span class="${cls}">${label}</span><div class="msg-text">${formattedText}</div>`;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  saveHistory();
+}
+
+function showTyping() {
+  typing.classList.add('active');
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function hideTyping() {
+  typing.classList.remove('active');
+}
+
+async function send(){
+  const msg = q.value.trim();
+  if(!msg) return;
+
+  // Disable input while processing
+  sendBtn.disabled = true;
+  q.disabled = true;
+
+  addLine("Bạn", msg, "me", true);
+  history.push({ role: "user", text: msg });
+  q.value = "";
+
+  showTyping();
+
+  try {
+    const apiUrl = window.location.hostname === 'localhost' 
+      ? 'http://localhost:3000/api/chat'
+      : '/api/chat';
+    
+    const r = await fetch(apiUrl, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ message: msg, history })
+    });
+
+    const data = await r.json();
+    const reply = data.reply || data.error || "Lỗi không xác định.";
+
+    hideTyping();
+    addLine("MLN131 Bot", reply, "bot", false);
+    history.push({ role: "assistant", text: reply });
+  } catch (error) {
+    hideTyping();
+    addLine("MLN131 Bot", "⚠️ Không thể kết nối đến server. Vui lòng thử lại.", "bot", false);
+  } finally {
+    // Re-enable input
+    sendBtn.disabled = false;
+    q.disabled = false;
+    q.focus();
+  }
+}
+
+document.getElementById("send").addEventListener("click", send);
+clearBtn.addEventListener("click", clearHistory);
+
+q.addEventListener("keydown", e => { 
+  if(e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+});
+
+// Load history on page load
+loadHistory();
+</script>
+</body>
+</html>
