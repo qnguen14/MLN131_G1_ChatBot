@@ -123,7 +123,7 @@ Trả lời (bullet points nếu phù hợp):
 `;
 
     const result = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-tts',
+      model: 'gemini-2.5-flash-lite',
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
     });
 
